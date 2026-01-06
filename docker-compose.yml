@@ -1,0 +1,29 @@
+# PiscesER1 Marine Support Bot - Docker Compose Configuration
+version: '3.8'
+
+services:
+  pisces-support-bot:
+    build: .
+    container_name: pisces-support-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist database and logs outside container
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      # Override paths for container
+      - LOG_FILE=/app/logs/pisces_support_bot.log
+      - DATABASE_URL=sqlite:////app/data/pisces_support_bot.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "from config import Config; exit(0 if Config.validate_config() else 1)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
