@@ -1,6 +1,7 @@
 import requests
 import time
 import json
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
@@ -91,6 +92,20 @@ class ServiceDeskPlusClient:
 
         return ""
 
+    @staticmethod
+    def _safe_dict(value: Any) -> Dict[str, Any]:
+        """Return value when it is a dict; otherwise an empty dict."""
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _nested_field_name(parent: Optional[Dict[str, Any]], key: str,
+                           default: str) -> str:
+        """Read nested {key: {name: ...}} fields safely when values may be null."""
+        nested = ServiceDeskPlusClient._safe_dict(
+            ServiceDeskPlusClient._safe_dict(parent).get(key)
+        )
+        return nested.get("name", default) or default
+
     def resolve_requester_email(self, ticket_id: str,
                                 ticket: Optional[Ticket] = None) -> str:
         """Return requester email, fetching full ticket details if needed."""
@@ -102,7 +117,48 @@ class ServiceDeskPlusClient:
             logger.info(f"Resolved requester email for ticket {ticket_id} via ticket details")
             return details.customer_email.strip()
 
+        legacy_email = self._get_requester_email_legacy(ticket_id)
+        if legacy_email:
+            logger.info(f"Resolved requester email for ticket {ticket_id} via legacy GET_REQUEST")
+            return legacy_email
+
         return ""
+
+    def _get_requester_email_legacy(self, ticket_id: str) -> str:
+        """Fetch requester email via legacy GET_REQUEST when v3 omits it."""
+        url = f"{self.legacy_base_url}/sdpapi/request/{ticket_id}"
+        form_data = {
+            "OPERATION_NAME": "GET_REQUEST",
+            "TECHNICIAN_KEY": self.api_key,
+        }
+
+        response_body = self._make_legacy_request(url, form_data)
+        if not response_body:
+            return ""
+
+        email_keys = (
+            "requesteremail", "requester_email", "email_id", "emailid",
+            "email", "requester mail", "requestermail"
+        )
+
+        try:
+            root = ET.fromstring(response_body)
+            for param in root.iter("parameter"):
+                name_el = param.find("name")
+                value_el = param.find("value")
+                if name_el is None or value_el is None:
+                    continue
+                name = (name_el.text or "").strip().lower()
+                value = (value_el.text or "").strip()
+                if value and name in email_keys:
+                    return value
+                if value and "email" in name and "@" in value:
+                    return value
+        except ET.ParseError:
+            pass
+
+        match = re.search(r"[\w.+-]+@[\w.-]+\.\w+", response_body)
+        return match.group(0) if match else ""
         
     def _rate_limit(self):
         """Implement rate limiting to avoid API throttling"""
@@ -210,7 +266,7 @@ class ServiceDeskPlusClient:
             for ticket_data in response_data["requests"]:
                 try:
                     # Extract requester information
-                    requester = ticket_data.get("requester", {})
+                    requester = self._safe_dict(ticket_data.get("requester"))
                     customer_name = requester.get("name", "Unknown")
                     customer_email = self._extract_requester_email(requester, ticket_data)
                     
@@ -482,25 +538,32 @@ class ServiceDeskPlusClient:
             
             if not response_data:
                 return None
-            
-            ticket_data = response_data.get("request", {})
-            
+
+            ticket_data = self._safe_dict(response_data.get("request"))
+            if not ticket_data:
+                logger.warning(f"No request payload in ticket details for {ticket_id}")
+                return None
+
             # Extract requester information
-            requester = ticket_data.get("requester", {})
+            requester = self._safe_dict(ticket_data.get("requester"))
             customer_name = requester.get("name", "Unknown")
             customer_email = self._extract_requester_email(requester, ticket_data)
-            
+
             # Parse timestamps (handles multiple formats from SDP API)
             created_time = self._parse_timestamp(ticket_data.get("created_time", {}))
             updated_time = self._parse_timestamp(ticket_data.get("modified_time", {}))
-            
-            # Map status and priority
-            sdp_status = ticket_data.get("status", {}).get("name", "Open")
+
+            # Map status and priority (SDP may return null nested objects)
+            sdp_status = self._nested_field_name(ticket_data, "status", "Open")
             mapped_status = self._map_status(sdp_status)
-            
-            sdp_priority = ticket_data.get("priority", {}).get("name", "Medium")
+
+            sdp_priority = self._nested_field_name(ticket_data, "priority", "Medium")
             mapped_priority = self._map_priority(sdp_priority)
-            
+
+            site = self._safe_dict(ticket_data.get("site"))
+            technician = self._safe_dict(ticket_data.get("technician"))
+            category = self._safe_dict(ticket_data.get("category"))
+
             ticket = Ticket(
                 ticket_id=str(ticket_data["id"]),
                 subject=ticket_data.get("subject", "No Subject"),
@@ -509,11 +572,11 @@ class ServiceDeskPlusClient:
                 priority=mapped_priority,
                 customer_name=customer_name,
                 customer_email=customer_email,
-                department_id=str(ticket_data.get("site", {}).get("id", "")),
+                department_id=str(site.get("id", "")),
                 created_time=created_time,
                 updated_time=updated_time,
-                assignee_id=str(ticket_data.get("technician", {}).get("id", "")) if ticket_data.get("technician") else None,
-                tags=ticket_data.get("category", {}).get("name", "").split(",") if ticket_data.get("category") else []
+                assignee_id=str(technician.get("id", "")) if technician.get("id") else None,
+                tags=category.get("name", "").split(",") if category.get("name") else []
             )
             
             return ticket
