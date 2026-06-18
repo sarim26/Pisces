@@ -200,10 +200,13 @@ class PiscesSupportBot:
                 logger.warning(f"Could not add resolution for ticket {ticket.ticket_id}; continuing to send reply")
 
             # 2) Send the same text as an email reply to the requester (the Reply action)
+            requester_email = self.ticket_client.resolve_requester_email(
+                ticket.ticket_id, ticket
+            )
             reply_success = self.ticket_client.send_reply_to_customer(
                 ticket_id=ticket.ticket_id,
                 response_text=response.response_text,
-                to_email=ticket.customer_email,
+                to_email=requester_email,
                 subject=f"Re: {ticket.subject}"
             )
             

@@ -67,6 +67,42 @@ class ServiceDeskPlusClient:
         # Rate limiting
         self.last_request_time = 0
         self.min_request_interval = 0.1  # 100ms between requests
+
+    @staticmethod
+    def _extract_requester_email(requester: Optional[Dict[str, Any]],
+                                 ticket_data: Optional[Dict[str, Any]] = None) -> str:
+        """Extract requester email from SDP ticket/requester payloads.
+
+        The list endpoint often returns requester with only id/name; the email
+        may appear under alternate keys or only on the single-ticket GET.
+        """
+        requester = requester or {}
+
+        for key in ("email_id", "email", "primary_email", "mail"):
+            value = requester.get(key)
+            if value and str(value).strip():
+                return str(value).strip()
+
+        if ticket_data:
+            for key in ("requester_email", "txt_email", "email_id"):
+                value = ticket_data.get(key)
+                if value and str(value).strip():
+                    return str(value).strip()
+
+        return ""
+
+    def resolve_requester_email(self, ticket_id: str,
+                                ticket: Optional[Ticket] = None) -> str:
+        """Return requester email, fetching full ticket details if needed."""
+        if ticket and ticket.customer_email and ticket.customer_email.strip():
+            return ticket.customer_email.strip()
+
+        details = self.get_ticket_details(ticket_id)
+        if details and details.customer_email and details.customer_email.strip():
+            logger.info(f"Resolved requester email for ticket {ticket_id} via ticket details")
+            return details.customer_email.strip()
+
+        return ""
         
     def _rate_limit(self):
         """Implement rate limiting to avoid API throttling"""
@@ -176,7 +212,7 @@ class ServiceDeskPlusClient:
                     # Extract requester information
                     requester = ticket_data.get("requester", {})
                     customer_name = requester.get("name", "Unknown")
-                    customer_email = requester.get("email_id", "")
+                    customer_email = self._extract_requester_email(requester, ticket_data)
                     
                     # Parse timestamps (handles multiple formats from SDP API)
                     created_time = self._parse_timestamp(ticket_data.get("created_time", {}))
@@ -452,7 +488,7 @@ class ServiceDeskPlusClient:
             # Extract requester information
             requester = ticket_data.get("requester", {})
             customer_name = requester.get("name", "Unknown")
-            customer_email = requester.get("email_id", "")
+            customer_email = self._extract_requester_email(requester, ticket_data)
             
             # Parse timestamps (handles multiple formats from SDP API)
             created_time = self._parse_timestamp(ticket_data.get("created_time", {}))
