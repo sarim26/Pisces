@@ -117,6 +117,11 @@ class ServiceDeskPlusClient:
             logger.info(f"Resolved requester email for ticket {ticket_id} via ticket details")
             return details.customer_email.strip()
 
+        email = self._get_requester_email_from_request_api(ticket_id)
+        if email:
+            logger.info(f"Resolved requester email for ticket {ticket_id} via request/users API")
+            return email
+
         legacy_email = self._get_requester_email_legacy(ticket_id)
         if legacy_email:
             logger.info(f"Resolved requester email for ticket {ticket_id} via legacy GET_REQUEST")
@@ -124,15 +129,46 @@ class ServiceDeskPlusClient:
 
         return ""
 
+    def _get_requester_email_from_request_api(self, ticket_id: str) -> str:
+        """Load requester email from v3 request and users endpoints."""
+        response_data = self._make_request("GET", f"requests/{ticket_id}")
+        if not response_data:
+            return ""
+
+        ticket_data = self._safe_dict(response_data.get("request"))
+        requester = self._safe_dict(ticket_data.get("requester"))
+
+        email = self._extract_requester_email(requester, ticket_data)
+        if email:
+            return email
+
+        requester_id = requester.get("id")
+        if requester_id:
+            return self._get_user_email_by_id(str(requester_id))
+
+        return ""
+
+    def _get_user_email_by_id(self, user_id: str) -> str:
+        """Fetch email_id for a requester/technician user record."""
+        response_data = self._make_request("GET", f"users/{user_id}")
+        if not response_data:
+            return ""
+
+        user = self._safe_dict(response_data.get("user"))
+        email = user.get("email_id") or user.get("email")
+        if email and str(email).strip():
+            return str(email).strip()
+
+        return ""
+
     def _get_requester_email_legacy(self, ticket_id: str) -> str:
         """Fetch requester email via legacy GET_REQUEST when v3 omits it."""
-        url = f"{self.legacy_base_url}/sdpapi/request/{ticket_id}"
         form_data = {
             "OPERATION_NAME": "GET_REQUEST",
             "TECHNICIAN_KEY": self.api_key,
         }
 
-        response_body = self._make_legacy_request(url, form_data)
+        response_body = self._post_legacy_operation(f"request/{ticket_id}", form_data)
         if not response_body:
             return ""
 
@@ -246,6 +282,22 @@ class ServiceDeskPlusClient:
         except Exception as e:
             logger.error(f"Unexpected error in ServiceDesk Plus legacy API request: {e}")
             return None
+
+    def _post_legacy_operation(self, path_suffix: str,
+                               form_data: Dict[str, Any]) -> Optional[str]:
+        """POST a legacy /sdpapi operation, trying common URL variants."""
+        normalized = path_suffix.strip("/")
+        candidate_urls = [
+            f"{self.legacy_base_url}/sdpapi/{normalized}/",
+            f"{self.legacy_base_url}/sdpapi/{normalized}",
+        ]
+
+        for url in candidate_urls:
+            response_body = self._make_legacy_request(url, form_data)
+            if response_body is not None:
+                return response_body
+
+        return None
 
     def get_tickets(self, status: str = "Open", limit: int = 50) -> List[Ticket]:
         """Fetch tickets from ServiceDesk Plus"""
@@ -431,9 +483,13 @@ class ServiceDeskPlusClient:
             if not to_email:
                 logger.warning(
                     f"No requester email available for ticket {ticket_id}; "
-                    f"cannot send email reply"
+                    f"posting public note so SDP can notify from ticket data"
                 )
-                return False
+                return self.post_ticket_response(
+                    ticket_id=ticket_id,
+                    response_text=response_text,
+                    is_public=True
+                )
 
             url = f"{self.legacy_base_url}/sdpapi/request/{ticket_id}"
 
@@ -453,11 +509,18 @@ class ServiceDeskPlusClient:
                 "INPUT_DATA": input_xml
             }
 
-            response_body = self._make_legacy_request(url, form_data)
+            response_body = self._post_legacy_operation(f"request/{ticket_id}", form_data)
 
             if response_body is None:
-                logger.error(f"Failed to send email reply for ticket {ticket_id}")
-                return False
+                logger.warning(
+                    f"Legacy REPLY_REQUEST unavailable for ticket {ticket_id}; "
+                    f"falling back to v3 public note"
+                )
+                return self.post_ticket_response(
+                    ticket_id=ticket_id,
+                    response_text=response_text,
+                    is_public=True
+                )
 
             # The REPLY_REQUEST operation reports a status in its body
             # (JSON or XML). Treat an explicit success marker as success and
@@ -476,12 +539,15 @@ class ServiceDeskPlusClient:
                 )
                 return True
 
-            # No explicit marker: log the body so the outcome can be verified.
             logger.warning(
-                f"Reply operation returned an unrecognized response for "
-                f"ticket {ticket_id}: {response_body}"
+                f"Legacy reply returned unrecognized response for ticket {ticket_id}; "
+                f"falling back to v3 public note"
             )
-            return False
+            return self.post_ticket_response(
+                ticket_id=ticket_id,
+                response_text=response_text,
+                is_public=True
+            )
 
         except Exception as e:
             logger.error(f"Error sending email reply for ticket {ticket_id}: {e}")
