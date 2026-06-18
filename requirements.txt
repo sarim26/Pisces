@@ -3,10 +3,7 @@
 # HTTP requests
 requests>=2.31.0
 
-# Google Gemini AI
-google-generativeai>=0.3.0
-
-# OpenAI (ChatGPT)
+# OpenAI
 openai>=1.0.0
 
 # Environment variables
