@@ -50,7 +50,17 @@ class ServiceDeskPlusClient:
         self.site_id = Config.SDP_SITE_ID
         self.group_id = Config.SDP_GROUP_ID
         self.technician_id = Config.SDP_TECHNICIAN_ID
-        
+
+        # Legacy /sdpapi base URL (host:port without the /api/v3 suffix).
+        # The v3 REST API has no email-reply operation, so the legacy
+        # REPLY_REQUEST operation is used to actually email the requester.
+        self.legacy_base_url = self.base_url
+        for suffix in ("/api/v3", "/api/v1", "/sdpapi"):
+            if self.legacy_base_url.endswith(suffix):
+                self.legacy_base_url = self.legacy_base_url[: -len(suffix)]
+                break
+        self.legacy_base_url = self.legacy_base_url.rstrip("/")
+
         self.session = requests.Session()
         
         # Rate limiting
@@ -100,7 +110,31 @@ class ServiceDeskPlusClient:
         except Exception as e:
             logger.error(f"Unexpected error in ServiceDesk Plus API request: {e}")
             return None
-    
+
+    def _make_legacy_request(self, url: str, data: Dict[str, Any]) -> Optional[str]:
+        """Make a request to the legacy /sdpapi endpoint (form-encoded).
+
+        Returns the raw response body text on success, or None on failure.
+        Authentication is handled via the TECHNICIAN_KEY form field, so no
+        authtoken header is sent here.
+        """
+        try:
+            self._rate_limit()
+
+            response = self.session.post(url, data=data, timeout=30)
+            response.raise_for_status()
+            return response.text
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"ServiceDesk Plus legacy API request failed: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response status: {e.response.status_code}")
+                logger.error(f"Response body: {e.response.text}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in ServiceDesk Plus legacy API request: {e}")
+            return None
+
     def get_tickets(self, status: str = "Open", limit: int = 50) -> List[Ticket]:
         """Fetch tickets from ServiceDesk Plus"""
         try:
@@ -241,32 +275,102 @@ class ServiceDeskPlusClient:
             logger.error(f"Error posting note to ServiceDesk Plus ticket {ticket_id}: {e}")
             return False
     
-    def send_reply_to_customer(self, ticket_id: str, response_text: str, subject: str = None) -> bool:
-        """Send a reply to the customer by adding a resolution (triggers email notification)"""
+    def add_resolution(self, ticket_id: str, response_text: str) -> bool:
+        """Add the response text to the request's Resolution tab.
+
+        This stores the content on the ticket but does NOT, by itself,
+        reliably email the requester. Use send_reply_to_customer() to email.
+        """
         try:
-            # Use the resolution endpoint - this notifies the requester
             endpoint = f"requests/{ticket_id}/resolutions"
-            
-            # Build resolution data
+
             resolution_data = {
                 "resolution": {
                     "content": response_text
                 }
             }
-            
+
             # Use input_data as form parameter (SDP API requirement)
             params = {"input_data": json.dumps(resolution_data)}
             response_data = self._make_request("POST", endpoint, params=params)
-            
+
             if response_data:
-                logger.info(f"Successfully sent resolution/reply to customer for ticket {ticket_id}")
+                logger.info(f"Successfully added resolution to ticket {ticket_id}")
                 return True
             else:
-                logger.error(f"Failed to send resolution for ticket {ticket_id}")
+                logger.error(f"Failed to add resolution for ticket {ticket_id}")
                 return False
-                
+
         except Exception as e:
-            logger.error(f"Error sending resolution for ticket {ticket_id}: {e}")
+            logger.error(f"Error adding resolution for ticket {ticket_id}: {e}")
+            return False
+
+    def send_reply_to_customer(self, ticket_id: str, response_text: str,
+                               to_email: Optional[str] = None,
+                               subject: Optional[str] = None) -> bool:
+        """Send an email reply to the requester (the "Reply" action).
+
+        Mirrors clicking Reply in the request's conversation/description tab,
+        which delivers an email to the requester. The v3 REST API does not
+        expose an email-reply operation, so the legacy REPLY_REQUEST operation
+        on the /sdpapi endpoint is used.
+        """
+        try:
+            if not to_email:
+                logger.warning(
+                    f"No requester email available for ticket {ticket_id}; "
+                    f"cannot send email reply"
+                )
+                return False
+
+            url = f"{self.legacy_base_url}/sdpapi/request/{ticket_id}"
+
+            details = {
+                "to": to_email,
+                "subject": subject or f"Re: Request {ticket_id}",
+                "description": response_text
+            }
+            input_data = {"operation": {"details": details}}
+
+            form_data = {
+                "OPERATION_NAME": "REPLY_REQUEST",
+                "TECHNICIAN_KEY": self.api_key,
+                "INPUT_DATA": json.dumps(input_data),
+                "format": "json"
+            }
+
+            response_body = self._make_legacy_request(url, form_data)
+
+            if response_body is None:
+                logger.error(f"Failed to send email reply for ticket {ticket_id}")
+                return False
+
+            # The REPLY_REQUEST operation reports a status in its body
+            # (JSON or XML). Treat an explicit success marker as success and
+            # an explicit failure marker as failure; log the body either way.
+            body_lower = response_body.lower()
+            if "failed" in body_lower or "failure" in body_lower:
+                logger.error(
+                    f"Reply operation reported failure for ticket {ticket_id}: "
+                    f"{response_body}"
+                )
+                return False
+
+            if "success" in body_lower:
+                logger.info(
+                    f"Successfully sent email reply to customer for ticket {ticket_id}"
+                )
+                return True
+
+            # No explicit marker: log the body so the outcome can be verified.
+            logger.warning(
+                f"Reply operation returned an unrecognized response for "
+                f"ticket {ticket_id}: {response_body}"
+            )
+            return False
+
+        except Exception as e:
+            logger.error(f"Error sending email reply for ticket {ticket_id}: {e}")
             return False
     
     def update_ticket_status(self, ticket_id: str, status: str) -> bool:

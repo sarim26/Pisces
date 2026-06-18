@@ -15,6 +15,11 @@ class AIProcessor:
         self.model = genai.GenerativeModel(Config.GEMINI_MODEL)
         self.max_tokens = Config.GEMINI_MAX_TOKENS
         self.temperature = Config.GEMINI_TEMPERATURE
+
+        # OpenAI (ChatGPT) implementation kept for later
+        # from openai import OpenAI
+        # self.client = OpenAI(api_key=Config.OPENAI_API_KEY)
+        # self.openai_model = Config.OPENAI_MODEL
         
         # Initialize escalation notifier
         self.escalation_notifier = EscalationNotifier()
@@ -116,7 +121,7 @@ class AIProcessor:
             # Generate response using Gemini
             system_prompt = "You are a professional customer support representative for PiscesER1 Marine. Always be helpful, accurate, and professional."
             full_prompt = f"{system_prompt}\n\n{prompt}"
-            
+
             response = self.model.generate_content(
                 full_prompt,
                 generation_config=genai.types.GenerationConfig(
@@ -125,7 +130,7 @@ class AIProcessor:
                     top_p=0.9
                 )
             )
-            
+
             response_text = response.text.strip()
             generation_time = time.time() - start_time
             
@@ -282,7 +287,7 @@ Best regards,
                 "Say hello",
                 generation_config=genai.types.GenerationConfig(max_output_tokens=10)
             )
-            
+
             # Handle safety filters - check if response has content
             if response.candidates and len(response.candidates) > 0:
                 candidate = response.candidates[0]

@@ -78,9 +78,9 @@ class PiscesSupportBot:
             logger.error("ServiceDesk Plus API connection test failed")
             return False
         
-        # Test Gemini API
+        # Test OpenAI API
         if not self.ai_processor.test_connection():
-            logger.error("Gemini API connection test failed")
+            logger.error("OpenAI API connection test failed")
             return False
         
         logger.info("All connection tests passed")
@@ -191,16 +191,25 @@ class PiscesSupportBot:
             # Save response to database
             self.db_manager.save_ticket_response(response)
             
-            # Send actual reply to customer (email)
+            # 1) Record the same text in the Resolution tab (keeps a record on the ticket)
+            resolution_success = self.ticket_client.add_resolution(
+                ticket_id=ticket.ticket_id,
+                response_text=response.response_text
+            )
+            if not resolution_success:
+                logger.warning(f"Could not add resolution for ticket {ticket.ticket_id}; continuing to send reply")
+
+            # 2) Send the same text as an email reply to the requester (the Reply action)
             reply_success = self.ticket_client.send_reply_to_customer(
                 ticket_id=ticket.ticket_id,
                 response_text=response.response_text,
+                to_email=ticket.customer_email,
                 subject=f"Re: {ticket.subject}"
             )
             
             if not reply_success:
-                # If reply fails, try posting as a note instead (fallback)
-                logger.warning(f"Reply failed for ticket {ticket.ticket_id}, falling back to note")
+                # If the email reply fails, try posting as a public note instead (fallback)
+                logger.warning(f"Email reply failed for ticket {ticket.ticket_id}, falling back to public note")
                 note_success = self.ticket_client.post_ticket_response(
                     ticket_id=ticket.ticket_id,
                     response_text=response.response_text

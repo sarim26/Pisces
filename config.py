@@ -18,11 +18,17 @@ class Config:
     SDP_GROUP_ID = os.getenv("SDP_GROUP_ID")
     SDP_TECHNICIAN_ID = os.getenv("SDP_TECHNICIAN_ID")
     
-    # Gemini Configuration
+    # Gemini Configuration (active)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     GEMINI_MAX_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "1000"))
     GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
+
+    # OpenAI Configuration (inactive / kept for later)
+    # OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    # OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # OPENAI_MAX_TOKENS = int(os.getenv("OPENAI_MAX_TOKENS", "1000"))
+    # OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
     
     # Application Configuration
     BOT_NAME = "PiscesER1 Marine Support Bot"
