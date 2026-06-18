@@ -1,6 +1,7 @@
 import requests
 import time
 import json
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from loguru import logger
@@ -110,6 +111,25 @@ class ServiceDeskPlusClient:
         except Exception as e:
             logger.error(f"Unexpected error in ServiceDesk Plus API request: {e}")
             return None
+
+    @staticmethod
+    def _build_legacy_input_xml(fields: Dict[str, str]) -> str:
+        """Build the legacy /sdpapi INPUT_DATA XML payload.
+
+        Produces:
+            <Operation><Details>
+                <parameter><name>key</name><value>val</value></parameter>
+                ...
+            </Details></Operation>
+        ElementTree handles XML-escaping of values automatically.
+        """
+        operation = ET.Element("Operation")
+        details = ET.SubElement(operation, "Details")
+        for key, value in fields.items():
+            parameter = ET.SubElement(details, "parameter")
+            ET.SubElement(parameter, "name").text = key
+            ET.SubElement(parameter, "value").text = value if value is not None else ""
+        return ET.tostring(operation, encoding="unicode")
 
     def _make_legacy_request(self, url: str, data: Dict[str, Any]) -> Optional[str]:
         """Make a request to the legacy /sdpapi endpoint (form-encoded).
@@ -325,18 +345,20 @@ class ServiceDeskPlusClient:
 
             url = f"{self.legacy_base_url}/sdpapi/request/{ticket_id}"
 
-            details = {
+            # The legacy /sdpapi REPLY_REQUEST operation expects INPUT_DATA as
+            # XML (<Operation><Details><parameter>...). JSON or extra params
+            # (e.g. format=json) trigger SDP's request-validation/security
+            # filter and get rejected with an HTML error page.
+            input_xml = self._build_legacy_input_xml({
                 "to": to_email,
                 "subject": subject or f"Re: Request {ticket_id}",
                 "description": response_text
-            }
-            input_data = {"operation": {"details": details}}
+            })
 
             form_data = {
                 "OPERATION_NAME": "REPLY_REQUEST",
                 "TECHNICIAN_KEY": self.api_key,
-                "INPUT_DATA": json.dumps(input_data),
-                "format": "json"
+                "INPUT_DATA": input_xml
             }
 
             response_body = self._make_legacy_request(url, form_data)
