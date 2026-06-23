@@ -3,8 +3,8 @@
 # HTTP requests
 requests>=2.31.0
 
-# OpenAI
-openai>=1.0.0
+# Google Gemini AI
+google-generativeai>=0.3.0
 
 # Environment variables
 python-dotenv>=1.0.0

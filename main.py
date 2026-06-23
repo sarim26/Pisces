@@ -3,7 +3,7 @@
 PiscesER1 Marine Support Bot - Main Entry Point
 
 This script provides the command-line interface for the automated customer support
-ticket reply system for PiscesER1 Marine using ServiceDesk Plus and OpenAI.
+ticket reply system for PiscesER1 Marine using ServiceDesk Plus and Google Gemini AI.
 
 Usage:
     python main.py --mode continuous --interval 5
@@ -62,12 +62,12 @@ def test_connections():
             logger.error("ServiceDesk Plus API connection failed")
             return False
         
-        # Test OpenAI API
-        logger.info("Testing OpenAI API connection...")
+        # Test Gemini API
+        logger.info("Testing Gemini API connection...")
         if bot.ai_processor.test_connection():
-            logger.success("OpenAI API connection successful")
+            logger.success("Gemini API connection successful")
         else:
-            logger.error("OpenAI API connection failed")
+            logger.error("Gemini API connection failed")
             return False
         
         logger.success("All connection tests passed!")

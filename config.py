@@ -18,11 +18,11 @@ class Config:
     SDP_GROUP_ID = os.getenv("SDP_GROUP_ID")
     SDP_TECHNICIAN_ID = os.getenv("SDP_TECHNICIAN_ID")
     
-    # OpenAI Configuration (active)
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
-    OPENAI_MAX_TOKENS = int(os.getenv("OPENAI_MAX_TOKENS", "4096"))
-    OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+    # Gemini Configuration (active — gemini-2.5-flash-lite: best free-tier volume)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    GEMINI_MAX_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "4096"))
+    GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
     
     # Application Configuration
     BOT_NAME = "PiscesER1 Marine Support Bot"
@@ -82,7 +82,7 @@ class Config:
         required_vars = [
             cls.SDP_BASE_URL,
             cls.SDP_API_KEY,
-            cls.OPENAI_API_KEY
+            cls.GEMINI_API_KEY
         ]
         
         missing_vars = [var for var in required_vars if not var]

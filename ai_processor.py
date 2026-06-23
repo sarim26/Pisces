@@ -1,8 +1,8 @@
+import google.generativeai as genai
 import time
 from datetime import datetime
 from typing import Optional
 from loguru import logger
-from openai import OpenAI
 from models import Ticket, TicketResponse
 from config import Config
 from escalation_notifier import EscalationNotifier
@@ -11,10 +11,10 @@ class AIProcessor:
     """AI processor for generating customer support responses"""
 
     def __init__(self):
-        self.client = OpenAI(api_key=Config.OPENAI_API_KEY)
-        self.model = Config.OPENAI_MODEL
-        self.max_tokens = Config.OPENAI_MAX_TOKENS
-        self.temperature = Config.OPENAI_TEMPERATURE
+        genai.configure(api_key=Config.GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(Config.GEMINI_MODEL)
+        self.max_tokens = Config.GEMINI_MAX_TOKENS
+        self.temperature = Config.GEMINI_TEMPERATURE
         self.system_prompt = (
             "You are a professional customer support representative for "
             "PiscesER1 Marine. Always be helpful, accurate, and professional."
@@ -104,18 +104,6 @@ class AIProcessor:
 
         return True, "Response validated successfully"
 
-    def _create_chat_completion(self, user_prompt: str):
-        """Call OpenAI chat completions API."""
-        return self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-        )
-
     def generate_response(self, ticket: Ticket) -> Optional[TicketResponse]:
         """Generate an AI response for a customer support ticket"""
         try:
@@ -125,14 +113,18 @@ class AIProcessor:
             logger.info(f"Detected ticket type: {ticket_type} for ticket {ticket.ticket_id}")
 
             prompt = self._build_prompt(ticket, ticket_type)
-            response = self._create_chat_completion(prompt)
+            full_prompt = f"{self.system_prompt}\n\n{prompt}"
 
-            message = response.choices[0].message.content
-            if not message:
-                logger.warning(f"OpenAI returned empty content for ticket {ticket.ticket_id}")
-                return self._generate_fallback_response(ticket)
+            response = self.model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    top_p=0.9
+                )
+            )
 
-            response_text = message.strip()
+            response_text = response.text.strip()
             generation_time = time.time() - start_time
 
             is_valid, validation_message = self._validate_response(response_text)
@@ -157,7 +149,7 @@ class AIProcessor:
                 metadata={
                     "ticket_type": ticket_type,
                     "generation_time": generation_time,
-                    "model_used": self.model,
+                    "model_used": Config.GEMINI_MODEL,
                     "validation_message": validation_message
                 }
             )
@@ -276,17 +268,29 @@ Best regards,
             )
 
     def test_connection(self) -> bool:
-        """Test the connection to OpenAI API"""
+        """Test the connection to Gemini API"""
         try:
-            response = self._create_chat_completion("Say hello in one short sentence.")
-            message = response.choices[0].message.content
-            if message and message.strip():
-                logger.info("OpenAI API connection test successful")
-                return True
+            response = self.model.generate_content(
+                "Say hello",
+                generation_config=genai.types.GenerationConfig(max_output_tokens=10)
+            )
 
-            logger.error("OpenAI API connection test failed - empty response")
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if candidate.finish_reason == 2:
+                    logger.warning(
+                        "Gemini API test was blocked by safety filter, but API connection works"
+                    )
+                    return True
+                if candidate.content and candidate.content.parts:
+                    logger.info("Gemini API connection test successful")
+                    return True
+                logger.error("Gemini API connection test failed - no content in response")
+                return False
+
+            logger.error("Gemini API connection test failed - no candidates")
             return False
 
         except Exception as e:
-            logger.error(f"OpenAI API connection test failed: {e}")
+            logger.error(f"Gemini API connection test failed: {e}")
             return False
