@@ -7,6 +7,7 @@ from config import Config
 from servicedesk_client import ServiceDeskPlusClient
 from ai_processor import AIProcessor
 from database import DatabaseManager
+from smtp_mailer import CustomerMailer
 
 class PiscesSupportBot:
     """Main support bot for PiscesER1 Marine"""
@@ -18,6 +19,7 @@ class PiscesSupportBot:
             
         self.ai_processor = AIProcessor()
         self.db_manager = DatabaseManager()
+        self.customer_mailer = CustomerMailer()
         
         # Bot state
         self.is_running = False
@@ -78,10 +80,15 @@ class PiscesSupportBot:
             logger.error("ServiceDesk Plus API connection test failed")
             return False
         
-        # Test OpenAI API
+        # Test Gemini API
         if not self.ai_processor.test_connection():
-            logger.error("OpenAI API connection test failed")
+            logger.error("Gemini API connection test failed")
             return False
+
+        if not self.customer_mailer.test_connection():
+            logger.warning(
+                "SMTP not configured — bot will post SDP notes but cannot email customers"
+            )
         
         logger.info("All connection tests passed")
         return True
@@ -199,20 +206,29 @@ class PiscesSupportBot:
             if not resolution_success:
                 logger.warning(f"Could not add resolution for ticket {ticket.ticket_id}; continuing to send reply")
 
-            # 2) Send the same text as an email reply to the requester (the Reply action)
+            # 2) Email the requester directly via SMTP (Zoho)
             requester_email = self.ticket_client.resolve_requester_email(
                 ticket.ticket_id, ticket
             )
-            reply_success = self.ticket_client.send_reply_to_customer(
-                ticket_id=ticket.ticket_id,
-                response_text=response.response_text,
-                to_email=requester_email,
-                subject=f"Re: {ticket.subject}"
-            )
-            
-            if not reply_success:
-                # If the email reply fails, try posting as a public note instead (fallback)
-                logger.warning(f"Email reply failed for ticket {ticket.ticket_id}, falling back to public note")
+            email_success = False
+            if requester_email:
+                email_success = self.customer_mailer.send_ticket_reply(
+                    ticket=ticket,
+                    to_email=requester_email,
+                    response_text=response.response_text,
+                )
+            else:
+                logger.warning(
+                    f"No requester email for ticket {ticket.ticket_id}; "
+                    f"cannot send SMTP reply"
+                )
+
+            # 3) Public note in SDP when email failed (portal visibility)
+            if not email_success:
+                logger.warning(
+                    f"SMTP customer email failed for ticket {ticket.ticket_id}; "
+                    f"posting public note in SDP"
+                )
                 note_success = self.ticket_client.post_ticket_response(
                     ticket_id=ticket.ticket_id,
                     response_text=response.response_text
@@ -220,7 +236,7 @@ class PiscesSupportBot:
                 if not note_success:
                     return {
                         "success": False,
-                        "error": "Failed to send reply or post note to ServiceDesk Plus"
+                        "error": "Failed to send SMTP email or post SDP note"
                     }
             
             # Mark ticket as processed

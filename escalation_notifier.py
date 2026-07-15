@@ -3,23 +3,20 @@
 Escalation Notification System for PiscesER1 Marine Support Bot
 """
 
-import smtplib
 import requests
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Dict, Any
 from loguru import logger
 from config import Config
+from smtp_mailer import SmtpMailer
 
 class EscalationNotifier:
     """Handles escalation notifications to managers and technicians"""
     
     def __init__(self):
-        self.support_email = Config.SUPPORT_EMAIL
-        self.technician_email = Config.SDP_TECHNICIAN_EMAIL
         self.sdp_base_url = Config.SDP_BASE_URL
         self.sdp_api_key = Config.SDP_API_KEY
+        self.technician_email = Config.SDP_TECHNICIAN_EMAIL
         
         # Escalation contacts (placeholder emails - update with real ones later)
         self.escalation_contacts = {
@@ -28,11 +25,8 @@ class EscalationNotifier:
             "emergency_contact": Config.EMERGENCY_CONTACT
         }
         
-        # Email configuration
-        self.smtp_server = Config.SMTP_SERVER
-        self.smtp_port = Config.SMTP_PORT
-        self.smtp_username = Config.SMTP_USERNAME
-        self.smtp_password = Config.SMTP_PASSWORD
+        # Email configuration (shared with customer SMTP replies)
+        self.mailer = SmtpMailer()
     
     def send_notification(self, ticket, ai_response: str, escalation_type: str = "urgent"):
         """Send escalation notifications to relevant stakeholders"""
@@ -122,34 +116,9 @@ PiscesER1 Marine Support Bot
     
     def _send_email(self, recipient: str, subject: str, body: str):
         """Send email notification"""
-        
-        try:
-            # Create message
-            msg = MIMEMultipart()
-            # Use configured username or support email as From address
-            from_addr = self.smtp_username if self.smtp_username else self.support_email
-            msg['From'] = from_addr
-            msg['To'] = recipient
-            msg['Subject'] = subject
-            
-            # Add body
-            msg.attach(MIMEText(body, 'plain'))
-            
-            # Send email - handle both authenticated and local mail servers
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            
-            # Only use TLS and auth if credentials are provided (for cloud/external SMTP)
-            if self.smtp_username and self.smtp_password:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-            
-            server.send_message(msg)
-            server.quit()
-            
-            logger.info(f"Escalation email sent to {recipient}")
-            
-        except Exception as e:
-            logger.error(f"Failed to send email to {recipient}: {e}")
+        if not recipient or not recipient.strip():
+            return
+        self.mailer.send_email(recipient.strip(), subject, body)
     
     def _escalate_in_servicedesk_plus(self, ticket, escalation_type: str):
         """Escalate ticket in ServiceDesk Plus system"""

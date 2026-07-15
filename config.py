@@ -40,13 +40,11 @@ class Config:
     CHECK_INTERVAL_MINUTES = int(os.getenv("CHECK_INTERVAL_MINUTES", "5"))
     MAX_TICKETS_PER_RUN = int(os.getenv("MAX_TICKETS_PER_RUN", "10"))
     
-    # Email Configuration for Escalations
-    # For local mail servers, use your internal SMTP server (e.g., mail.yourdomain.local)
-    # For cloud email, use smtp.gmail.com or your email provider's SMTP server
-    SMTP_SERVER = os.getenv("SMTP_SERVER", "localhost")  # Default to localhost for local setups
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))  # Default port 25 for local mail servers
+    SMTP_SERVER = os.getenv("SMTP_SERVER", "localhost")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))
     SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "PiscesER1 Marine Support")
     
     # Escalation Contacts
     EMERGENCY_CONTACT = os.getenv("EMERGENCY_CONTACT", "emergency.placeholder@pisceser1marine.com")

@@ -69,6 +69,16 @@ def test_connections():
         else:
             logger.error("Gemini API connection failed")
             return False
+
+        # Test SMTP (customer reply emails)
+        logger.info("Testing SMTP connection (Zoho / customer emails)...")
+        if bot.customer_mailer.test_connection():
+            logger.success("SMTP connection successful")
+        else:
+            logger.warning(
+                "SMTP not configured or login failed — "
+                "customer emails will not send until .env SMTP_* is set"
+            )
         
         logger.success("All connection tests passed!")
         return True
