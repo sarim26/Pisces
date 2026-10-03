@@ -245,10 +245,28 @@ class PiscesSupportBot:
                 response_id=response.ticket_id,
                 status="completed"
             ))
-            
-            # Update ticket status if it's a fallback response
-            if response.response_type == "fallback":
+
+            # Low-confidence / human handoff → Pending so a technician picks it up
+            if response.response_type in ("fallback", "human_escalation"):
                 self.ticket_client.update_ticket_status(ticket.ticket_id, "Pending")
+                confidence_note = (
+                    f"Bot confidence: {response.confidence_score:.0%}\n"
+                    f"Uncertainty: {response.metadata.get('uncertainty', 0):.0%}\n"
+                    f"Keywords: {response.metadata.get('matched_keywords')}\n"
+                    f"KB sources: {response.metadata.get('kb_sources')}\n"
+                    f"Reason: {response.metadata.get('uncertainty_reason')}\n"
+                    "Raised to human because confidence is below threshold."
+                )
+                self.ticket_client.post_ticket_response(
+                    ticket.ticket_id,
+                    confidence_note,
+                    is_public=False,
+                )
+            else:
+                logger.info(
+                    f"Ticket {ticket.ticket_id} auto-replied from knowledge base "
+                    f"(confidence {response.confidence_score:.0%})"
+                )
             
             return {
                 "success": True,

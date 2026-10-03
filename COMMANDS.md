@@ -8,6 +8,7 @@
 | `python main.py --mode continuous` | Run continuously (default: every 5 minutes) |
 | `python main.py --mode continuous --interval 10` | Run continuously every 10 minutes |
 | `python main.py --test-connections` | Test ServiceDesk Plus and Gemini API connections |
+| `python test_knowledge.py` | Verify PDF knowledge files load and the right articles are retrieved |
 | `python main.py --status` | Show bot statistics and recent activity |
 | `python main.py --version` | Show version number |
 | `python main.py --help` | Show all available options |

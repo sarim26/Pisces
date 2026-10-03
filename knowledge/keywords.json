@@ -1,0 +1,15 @@
+{
+  "printer": ["printer", "print", "printing", "toner", "inkjet", "laserjet", "spooler", "paper jam", "cartridge"],
+  "server": ["server", "hanged", "hung", "hang", "not working", "down", "reboot", "blue screen", "bsod", "crash", "offline", "safe mode", "last known good", "log off", "logoff"],
+  "hardware": ["hardware", "equipment", "asset", "monitor", "keyboard", "mouse", "laptop", "desktop", "pc", "cpu", "ram", "disk", "hard drive", "ssd", "psu", "power supply", "lan port"],
+  "raid": ["raid", "st550", "hardware raid"],
+  "ram": ["ram", "memory", "dimm", "upgrade ram", "remove ram", "install ram"],
+  "network": ["network", "wifi", "wi-fi", "lan", "ethernet", "internet", "vpn", "netextender", "ip address", "dns"],
+  "rdp": ["rdp", "remote desktop", "mstsc", "remote connection"],
+  "os": ["windows", "wyse", "os image", "2012", "repair windows", "dvd"],
+  "performance": ["slow", "speed up", "performance", "disk cleanup", "c drive", "cleanup"],
+  "security": ["virus", "threat", "scan", "antivirus"],
+  "email": ["email", "outlook", "gmail", "mailbox", "signature", "smtp", "imap"],
+  "files": ["pdf", "compress", "7zip", "7-zip", "split file", "file extension", "rename"],
+  "tools": ["snipping tool", "screenshot"]
+}

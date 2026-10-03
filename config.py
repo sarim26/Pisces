@@ -45,6 +45,12 @@ class Config:
     SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "PiscesER1 Marine Support")
+
+    # Knowledge base (Phase 1: local files only. Phase 2: internet is off.)
+    KNOWLEDGE_DIR = os.getenv("KNOWLEDGE_DIR", "knowledge")
+    KNOWLEDGE_MAX_CHUNKS = int(os.getenv("KNOWLEDGE_MAX_CHUNKS", "4"))
+    CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.65"))
+    ENABLE_WEB_SEARCH = os.getenv("ENABLE_WEB_SEARCH", "false").lower() in ("1", "true", "yes")
     
     # Escalation Contacts
     EMERGENCY_CONTACT = os.getenv("EMERGENCY_CONTACT", "emergency.placeholder@pisceser1marine.com")
