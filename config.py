@@ -1,9 +1,31 @@
 import os
+from io import StringIO
+from pathlib import Path
 from dotenv import load_dotenv
 from typing import Optional
 
-# Load environment variables
-load_dotenv()
+
+def _load_env_file() -> None:
+    """Load .env even if it was saved as Windows-1252 instead of UTF-8."""
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        load_dotenv()
+        return
+
+    raw = env_path.read_bytes()
+    text = None
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        text = raw.decode("utf-8", errors="replace")
+    load_dotenv(stream=StringIO(text), override=True)
+
+
+_load_env_file()
 
 class Config:
     """Configuration class for PiscesER1 Marine Support Bot"""
