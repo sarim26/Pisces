@@ -117,25 +117,23 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
-    -Description "PiscesER1 Marine support bot — polls ServiceDesk Plus and replies from the knowledge base" `
+    -Description "PiscesER1 Marine support bot polls ServiceDesk Plus and replies from the knowledge base" `
     -Force | Out-Null
 
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 2
 Get-ScheduledTask -TaskName $TaskName | Format-List TaskName, State
 
-Write-Host @"
-
-Done.
-
-Useful commands:
-  Get-ScheduledTask -TaskName $TaskName
-  Get-WinEvent -LogName Application -MaxEvents 5 | Out-Null
-  Get-Content `"$InstallPath\pisces_support_bot.log`" -Tail 50
-  Stop-ScheduledTask -TaskName $TaskName
-  Start-ScheduledTask -TaskName $TaskName
-
-If SMTP failed in the connection test, fix SMTP_* in .env then restart the task.
-"@
+$logFile = Join-Path $InstallPath "pisces_support_bot.log"
+Write-Host ""
+Write-Host "Done."
+Write-Host ""
+Write-Host "Useful commands:"
+Write-Host "  Get-ScheduledTask -TaskName $TaskName"
+Write-Host "  Get-Content `"$logFile`" -Tail 50"
+Write-Host "  Stop-ScheduledTask -TaskName $TaskName"
+Write-Host "  Start-ScheduledTask -TaskName $TaskName"
+Write-Host ""
+Write-Host "If SMTP failed in the connection test, fix SMTP settings in .env then restart the task."
 
 exit 0
