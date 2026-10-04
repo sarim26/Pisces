@@ -17,6 +17,7 @@ $ErrorActionPreference = "Stop"
 if (-not $InstallPath) {
     $InstallPath = Split-Path -Parent $PSScriptRoot
 }
+# Allow running from Desktop\Pisces or C:\Pisces without extra flags.
 $InstallPath = (Resolve-Path $InstallPath).Path
 $PythonExe = Join-Path $InstallPath "venv\Scripts\python.exe"
 $BatPath = Join-Path $PSScriptRoot "Run-PiscesBot.bat"
