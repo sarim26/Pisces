@@ -73,30 +73,32 @@ python main.py --mode continuous --interval 5
 
 ## Deployment Options
 
-### Option 1: Windows Task Scheduler (Simplest)
+### Windows Server 2019 (recommended for 24/7)
 
-1. Open Task Scheduler: `taskschd.msc`
-2. Create Basic Task:
-   - **Name:** PiscesER1 Support Bot
-   - **Trigger:** Every 5 minutes
-   - **Action:** Start a program
-   - **Program:** `python`
-   - **Arguments:** `C:\path\to\Pisces\main.py --mode once`
-   - **Start in:** `C:\path\to\Pisces`
+Copy the project to `C:\Pisces` (include `.env` and `knowledge\*.pdf`), install Python 3.11+ for all users, then as Administrator:
 
-### Option 2: Windows Service (24/7 Operation)
+```powershell
+cd C:\Pisces
+powershell -ExecutionPolicy Bypass -File .\scripts\Install-PiscesWindows.ps1
+```
 
-Use NSSM (Non-Sucking Service Manager):
+Full steps: [WINDOWS_SERVER.md](WINDOWS_SERVER.md).
+
+### Option 1: Windows Task Scheduler (this PC)
+
+The installer above registers task **PiscesSupportBot** at startup using `scripts\Run-PiscesBot.bat` (continuous mode, not a 5-minute `--mode once` loop).
+
+### Option 2: Windows Service via NSSM (optional)
+
+Use NSSM only if you prefer Services.msc instead of Task Scheduler:
 
 1. Download NSSM from https://nssm.cc/download
-2. Install as service:
+2. Install:
    ```cmd
-   nssm install PiscesSupportBot
+   nssm install PiscesSupportBot "C:\Pisces\venv\Scripts\python.exe" "C:\Pisces\main.py --mode continuous --interval 5"
+   nssm set PiscesSupportBot AppDirectory C:\Pisces
+   nssm start PiscesSupportBot
    ```
-3. Configure:
-   - **Path:** `C:\Python39\python.exe`
-   - **Arguments:** `C:\path\to\Pisces\main.py --mode continuous`
-   - **Working Directory:** `C:\path\to\Pisces`
 
 ### Option 3: Docker
 
